@@ -18,8 +18,8 @@ void main(void)
         nop
 
         ; load example values; remove
-        ld a, #0x05
-        ld b, #0x70
+        ;ld a, #0x05
+        ;ld b, #0x70
 
         ; put a into lower part of hl (first argument)
         ld l, a
