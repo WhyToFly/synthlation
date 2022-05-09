@@ -32,7 +32,7 @@ JUMP_PROB = 0.5
 EMU_TIMEOUT = int(UC_SECOND_SCALE * 0.01)
 
 # timeout for synthesis
-TIME_LIMIT = 30 * 60 * 60
+TIME_LIMIT = 30 * 60
 # number of processes to start
 CPU_NUM = 8
 
