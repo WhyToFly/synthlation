@@ -479,13 +479,6 @@ if __name__ == '__main__':
 
     print("\nTranslating Game Boy Program '" + PROG_NAME + "'.")
 
-    time.sleep(2)
-
-    if random.random() > 0.5:
-        raise Exception("ey digga")
-
-    exit()
-
     # generate test cases
     test_cases = gen_test_cases(TEST_NUM)
 
