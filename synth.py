@@ -24,7 +24,7 @@ MAX_LEN = 10
 # number of test cases to generate
 TEST_NUM = 32
 # allow jumps?
-ALLOW_JMP = False
+ALLOW_JMP = True
 
 # timeout for synthesis
 TIME_LIMIT = 30 * 60 * 60
