@@ -42,7 +42,7 @@ ADDRESS = 0x1000000
 
 # constants from STOKE
 p_u = 0.16
-beta = 0.1
+beta = 0.15 # changed to accept more programs (distance metric is maybe not the best)
 p_o = 0.5
 p_c = 0.16
 p_s = 0.16
@@ -358,7 +358,7 @@ def translate(test_cases, test_results, done, ret_queue):
 
     emu.emu_start(ADDRESS, ADDRESS + len(asm_bytes))
 
-    EMU_TIMEOUT = int(UC_SECOND_SCALE * (time.time() - start_time) * 20)
+    EMU_TIMEOUT = int(UC_SECOND_SCALE * (time.time() - start_time) * 50)
 
 
     while not solved:
@@ -451,39 +451,45 @@ def cleanup(test_cases, test_results, prog):
     # map 2MB memory for this emulation
     emu.mem_map(ADDRESS, 2 * 1024 * 1024)
 
-    i = 0
-    while i < len(prog):
-        # remove UNUSED tokens
-        if prog[i].inst_type == INST_UNUSED:
-            prog.pop(i)
-        else:
-            # test if tests still work after removing this line
-            proposed = prog.copy()
-            proposed.pop(i)
+    # if the program contains jumps we should not alter the length of the program to keep the right labels
+    contains_jumps = False
 
+    for i in range(len(prog)):
+        # test if tests still work after removing this line
+        proposed = prog.copy()
+        proposed[i] = UNUSED()
 
-            prog_text = code_text_from_inst(proposed)
+        prog_text = code_text_from_inst(proposed)
 
-            # assemble code
-            asm_bytes = assemble_code(ks, prog_text)
+        # assemble code
+        asm_bytes = assemble_code(ks, prog_text)
 
-            # write to emulator memory
-            emu.mem_write(ADDRESS, asm_bytes)
+        # write to emulator memory
+        emu.mem_write(ADDRESS, asm_bytes)
 
-            cancelled = False
+        cancelled = False
 
-            # go through test cases, calculate cost sum
-            for j in range(len(test_cases)):
-                success, al, bl, cl, dl = run_x86_test(emu, len(asm_bytes), test_cases[j])
+        # go through test cases, calculate cost sum
+        for j in range(len(test_cases)):
+            success, al, bl, cl, dl = run_x86_test(emu, len(asm_bytes), test_cases[j])
 
-                # test if we get correct result; otherwise discard this program
-                if (not success) or (dl != test_results[j]):
-                    cancelled = True
-                    break
+            # test if we get correct result; otherwise discard this program
+            if (not success) or (dl != test_results[j]):
+                cancelled = True
+                break
 
-            # if all tests passed, accept as new program
-            if not cancelled:
-                prog = proposed
+        # if all tests passed, accept as new program
+        if not cancelled:
+            prog = proposed
+        elif proposed[i].inst_type == INST_LBL:
+            contains_jumps = True
+
+    # if the program does not contain jumps, we can clean out all unused instrucitons
+    if not contains_jumps:
+        i = 0
+        while i < len(prog):
+            if prog[i].inst_type == INST_UNUSED:
+                prog.pop(i)
             else:
                 i += 1
 
