@@ -25,11 +25,16 @@ MAX_LEN = 10
 TEST_NUM = 32
 # allow jumps?
 ALLOW_JMP = True
+# probability for actually using jumps even if they're allowed
+JUMP_PROB = 0.5
+
+# timeout for emulation; vital when using jumps as they can produce infinite loops that slow the search down a lot
+EMU_TIMEOUT = int(UC_SECOND_SCALE * 0.01)
 
 # timeout for synthesis
 TIME_LIMIT = 30 * 60 * 60
 # number of processes to start
-CPU_NUM = 4
+CPU_NUM = 8
 
 
 # memory address where emulation starts
@@ -43,7 +48,7 @@ p_c = 0.16
 p_s = 0.16
 p_i = 0.16
 
-# chenged w_m; in the paper this was 3 but there 64 bit registers were used
+# changed w_m; in the paper this was 3 but there 64 bit registers were used
 w_m = 1
 
 p_o_thresh = p_o
@@ -169,12 +174,16 @@ def code_text_from_inst(inst_list, add_timeout_check=True):
     return code_str
 
 def assemble_code(ks, code_str):
-    # Assemble the code
-    asm, _ = ks.asm(code_str)
-    # convert the array of integers into bytes
-    asm_bytes = bytes(asm)
+    try:
+        # Assemble the code
+        asm, _ = ks.asm(code_str)
+        # convert the array of integers into bytes
+        asm_bytes = bytes(asm)
 
-    return asm_bytes
+        return asm_bytes
+    except Exception as e:
+        print(e)
+        print(code_str)
 
 def run_x86_test(emu, prog_len, test):
     '''
@@ -185,15 +194,16 @@ def run_x86_test(emu, prog_len, test):
     # Write testcase inputs to al,bl
     emu.reg_write(UC_X86_REG_AL, test[0])
     emu.reg_write(UC_X86_REG_BL, test[1])
-    # emulate code; time out after a quarter of a second
+    # emulate code; set timeout since we might run into infinite loops
     try:
-        emu.emu_start(ADDRESS, ADDRESS + prog_len, timeout=int(UC_SECOND_SCALE * 0.25))
+        emu.emu_start(ADDRESS, ADDRESS + prog_len, timeout=EMU_TIMEOUT)
     except:
         # tell caller that we ran into CPU exception (probably because of div instruction)
         return False, None, None, None, None
 
     # whether execution terminated is in ESI
     done = (emu.reg_read(UC_X86_REG_ESI) == 3141)
+
 
     # result is in dl; but read all registers to
     # check if one of the others contains correct answer
@@ -263,8 +273,9 @@ def random_inst(allow_jmp):
     if random.random() < p_u:
         return UNUSED()
 
-    # generate new instruction type; check whether we are allowed to use jumps
-    if allow_jmp:
+    # generate new instruction type; check whether we are allowed to use jumps;
+    # even then don't use them that often
+    if allow_jmp and (random.random() < JUMP_PROB):
         new_inst_type = random.randint(0,3)
     else:
         new_inst_type = random.randint(1,3)
@@ -318,6 +329,8 @@ def translate(test_cases, test_results, done, ret_queue):
     use STOKE-inspired synthesis algorithm to find x86 program that is equivalent to GB one
 
     '''
+    global EMU_TIMEOUT
+
     # initialize keystone assembler
     ks = Ks(KS_ARCH_X86, KS_MODE_64)
 
@@ -334,6 +347,19 @@ def translate(test_cases, test_results, done, ret_queue):
     # don't include jumps so we can be sure that initial code won't time out
     current = [random_inst(allow_jmp=False) for i in range(MAX_LEN)]
     current_cost = 10000000
+
+    # test runtime of initial program to set limit for timeout
+
+    prog_text = code_text_from_inst(current)
+    asm_bytes = assemble_code(ks, prog_text)
+    emu.mem_write(ADDRESS, asm_bytes)
+
+    start_time = time.time()
+
+    emu.emu_start(ADDRESS, ADDRESS + len(asm_bytes))
+
+    EMU_TIMEOUT = int(UC_SECOND_SCALE * (time.time() - start_time) * 20)
+
 
     while not solved:
         proposed = current.copy()
