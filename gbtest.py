@@ -1,7 +1,7 @@
 from pyboy import PyBoy, WindowEvent
 from pyboy.core.mb import Motherboard
 
-def run_testcases(program, testcase_list):
+def run_gb_testcases(program, testcase_list):
     '''
     runs given test cases (list of tuples for inputs to a,b)
     returns list of outputs (register e)
